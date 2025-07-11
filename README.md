@@ -1,1 +1,1 @@
-# quantmodpractice
+# Having Fun with QuantMod!
