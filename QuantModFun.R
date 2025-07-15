@@ -72,3 +72,110 @@ AAPL["2025-01/2025-03"]  # quarter 1 2025
 
 lag(Cl(AAPL), k = 1) # yesterday's close
 diff(Cl(AAPL), lag = 1) # price change
+
+
+## July 15th 2025
+
+## Building and Evaluating Predicitve Models in R for Financial data:
+#(machinelearningmastery.com / using r for predictive modeling in finance)
+#install.packages("ggplot2")
+#install.packages("dplyr")
+library(ggplot2)
+library(dplyr)
+
+# simulating financial data:
+set.seed(73)
+n <- 100
+data = data.frame(
+  Date = seq.Date(from = as.Date("2025-07-15"), by = "month", length.out = n),
+  Revenue = cumsum(rnorm(n, mean = 100, sd = 10)),
+  Expense = cumsum(rnorm(n, mean = 50, sd = 5))
+)
+head(data)
+
+## feature engineering, making lagged features for prediction, splitting data into training and test
+# creating lagged feats
+data <- data %>% 
+  arrange(Date) %>%
+  mutate(Lag1_Revenue = lag(Revenue, 1),
+         Lag2_Revenue = lag(Revenue, 2),
+         Lag1_Expense = lag(Expense, 1),
+         Lag2_Expense = lag(Expense, 2)) %>%
+  na.omit()
+
+# split data
+set.seed(73)
+train_index <- sample(seq_len(nrow(data)), size = 0.8 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+
+# Traing the linear regression model to predict financial metric based on lagged features
+model <- lm(Revenue ~ Lag1_Revenue + Lag2_Revenue + Lag1_Expense + Lag2_Expense, data = train_data)
+
+# Making predictions that will help in evaluating model performance
+predictions <- predict(model, newdata = test_data)
+
+# Evaluating the model yay!
+results <- data.frame(Actual = test_data$Revenue, Predicted = predictions)
+rmse <- sqrt(mean((results$Actual - results$Predicted)^2))
+cat("root mean squared error (rmse):", rmse, "\n")
+
+# Visualize
+ggplot(results, aes(x = Actual, y = Predicted)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "limegreen") +
+  labs(title = "Actual vs Predicted Revenue",
+       x = "Actual Revenue",
+       y = "Predicted Revenue") +
+  theme_minimal()
+
+# Practical Application: Stock Price Prediction B)
+
+# past data
+getSymbols("AAPL", from = "2022-01-01", to = Sys.Date())
+aapl_price_data <- data.frame(Date = index(AAPL), Close = as.numeric(Cl(AAPL)))
+
+# lag features
+aapl_price_data <- aapl_price_data %>%
+  arrange(Date) %>%
+  mutate(
+    Lag1_Close = lag(Close, 1),
+    Lag2_Close = lag(Close, 2)
+  ) %>%
+  na.omit()
+
+#train test split 80/20
+set.seed(73)
+aapl_train_size <- floor(0.8 * nrow(aapl_price_data))
+aapl_train_data <- aapl_price_data[1:aapl_train_size, ]
+aapl_test_data <- aapl_price_data[(aapl_train_size + 1):nrow(aapl_price_data), ]
+
+# model 
+aapl_model <- lm(Close ~ Lag1_Close + Lag2_Close, data = aapl_train_data)
+
+# prediction
+aapl_predictions <- predict(aapl_model, newdata = aapl_test_data)
+
+# eval model performance
+aapl_results <- data.frame(
+  Date = aapl_test_data$Date,
+  Actual_Close = aapl_test_data$Close,
+  Predicted_Close = aapl_predictions
+)
+
+aapl_rmse <- sqrt(mean((aapl_results$Actual_Close - aapl_results$Predicted_Close)^2))
+cat("AAPL Prediction rmse:", aapl_rmse, "\n") #pretty decent
+
+# visuals
+ggplot(aapl_results, aes(x = Date)) +
+  geom_line(aes(y = Actual_Close, color = "Actual")) +
+  geom_line(aes(y = Predicted_Close, color = "Predicted")) +
+  labs(title = "AAPL Closing Price Prediction",
+       y = "Price (USD)", color = "Legend") +
+  theme_minimal()
+
+# a very basic buy/sell signal
+aapl_results <- aapl_results %>%
+  mutate(Signal = ifelse(Predicted_Close > lag(Actual_Close), "Buy", "Sell"))
+
+head(aapl_results[, c("Date", "Actual_Close", "Predicted_Close", "Signal")], 10)
